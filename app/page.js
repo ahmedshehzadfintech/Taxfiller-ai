@@ -248,7 +248,7 @@ export default function Home() {
         color: '#8B949E',
         fontSize: '0.85rem'
       }}>
-        © 2025 TaxFiller AI — Ahmed Shehzad Tax AI | Pakistan
+        © 2026 TaxFiller AI — Ahmed Shehzad Tax AI | Pakistan
       </footer>
 
     </main>
