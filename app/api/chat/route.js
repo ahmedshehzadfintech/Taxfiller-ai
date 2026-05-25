@@ -15,7 +15,7 @@ PEHLA SAWAAL HAMESHA YE HO:
 
 SALARY WALE SE YE POOCHO (ek ek karke):
 1. Employer ka naam?
-2. Maheena ki tنخواہ kitni hai?
+2. Maheena ki tankhwah kitni hai?
 3. Koi allowances hain? (medical, conveyance, house rent)
 4. Withholding tax kata hai employer ne?
 5. CNIC number?
@@ -36,8 +36,17 @@ export async function POST(request) {
       systemInstruction: SYSTEM_PROMPT
     })
 
+    // Sirf user/model messages rakho — aur pehla hamesha user ka ho
+    const cleanHistory = (history || [])
+      .filter(m => m.role === 'user' || m.role === 'model')
+      .filter((m, index, arr) => {
+        // Pehla message user ka hona chahiye
+        if (index === 0) return m.role === 'user'
+        return true
+      })
+
     const chat = model.startChat({
-      history: history || []
+      history: cleanHistory
     })
 
     const result = await chat.sendMessage(message)
@@ -52,4 +61,4 @@ export async function POST(request) {
       { status: 500 }
     )
   }
-      }
+  }
