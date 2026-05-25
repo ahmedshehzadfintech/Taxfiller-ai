@@ -31,27 +31,29 @@ export default function Home() {
             <option>English</option>
             <option>اردو</option>
           </select>
-          <button style={{
+          <a href="/login" style={{
             backgroundColor: 'transparent',
             color: '#E6EDF3',
             border: '1px solid #30363D',
             borderRadius: '8px',
             padding: '8px 20px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            textDecoration: 'none'
           }}>
             Login
-          </button>
-          <button style={{
+          </a>
+          <a href="/login" style={{
             backgroundColor: '#1DB954',
             color: '#000',
             border: 'none',
             borderRadius: '8px',
             padding: '8px 20px',
             cursor: 'pointer',
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            textDecoration: 'none'
           }}>
             Shuru Karein
-          </button>
+          </a>
         </div>
       </nav>
 
@@ -98,7 +100,7 @@ export default function Home() {
         </p>
 
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <button style={{
+          <a href="/login" style={{
             backgroundColor: '#1DB954',
             color: '#000',
             border: 'none',
@@ -106,26 +108,28 @@ export default function Home() {
             padding: '14px 32px',
             fontSize: '1rem',
             fontWeight: 'bold',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            textDecoration: 'none'
           }}>
             Abhi Shuru Karein →
-          </button>
-          <button style={{
+          </a>
+          <a href="#features" style={{
             backgroundColor: 'transparent',
             color: '#E6EDF3',
             border: '1px solid #30363D',
             borderRadius: '10px',
             padding: '14px 32px',
             fontSize: '1rem',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            textDecoration: 'none'
           }}>
             Aur Janein
-          </button>
+          </a>
         </div>
       </section>
 
       {/* FEATURES */}
-      <section style={{
+      <section id="features" style={{
         padding: '60px 40px',
         maxWidth: '1000px',
         margin: '0 auto'
@@ -226,7 +230,7 @@ export default function Home() {
         <p style={{ color: '#8B949E', marginBottom: '32px' }}>
           Hazaron Pakistanion ka trust — aap bhi try karein
         </p>
-        <button style={{
+        <a href="/login" style={{
           backgroundColor: '#1DB954',
           color: '#000',
           border: 'none',
@@ -234,10 +238,11 @@ export default function Home() {
           padding: '16px 40px',
           fontSize: '1.1rem',
           fontWeight: 'bold',
-          cursor: 'pointer'
+          cursor: 'pointer',
+          textDecoration: 'none'
         }}>
           Free Mein Shuru Karein →
-        </button>
+        </a>
       </section>
 
       {/* FOOTER */}
@@ -253,4 +258,4 @@ export default function Home() {
 
     </main>
   )
-        }
+              }
