@@ -272,7 +272,27 @@ export default function Chat() {
 
         <div ref={bottomRef} />
       </div>
-
+{/* PAYMENT BUTTON */}
+<div style={{
+  padding: '8px 16px',
+  backgroundColor: '#161B22',
+  borderTop: '1px solid #21262D',
+  textAlign: 'center'
+}}>
+  <a href="/payment" style={{
+    backgroundColor: '#1DB954',
+    color: '#000',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '10px 24px',
+    fontSize: '0.9rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    textDecoration: 'none'
+  }}>
+    Filing Submit Karein — Payment Karein →
+  </a>
+</div>
       {/* INPUT BOX */}
       <div style={{
         backgroundColor: '#161B22',
