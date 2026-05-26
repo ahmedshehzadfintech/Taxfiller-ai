@@ -36,19 +36,6 @@ export default function Pending() {
         <div style={{ color: '#1DB954', fontSize: '1.5rem', fontWeight: 'bold' }}>
           TaxFiller AI
         </div>
-         <a href="/iris" style={{
-  backgroundColor: '#1DB954',
-  color: '#000',
-  border: 'none',
-  borderRadius: '10px',
-  padding: '14px 28px',
-  fontSize: '1rem',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-  textDecoration: 'none'
-}}>
-  📋 Iris Filing Guide Dekhen
-</a>   
         <a href="/chat" style={{
           backgroundColor: 'transparent',
           color: '#8B949E',
@@ -144,12 +131,9 @@ export default function Pending() {
                 gap: '16px',
                 marginBottom: i < 4 ? '16px' : '0'
               }}>
-                {/* Icon */}
                 <div style={{ fontSize: '1.2rem', flexShrink: 0 }}>
                   {item.icon}
                 </div>
-
-                {/* Line */}
                 <div style={{ flex: 1 }}>
                   <div style={{
                     display: 'flex',
@@ -207,7 +191,7 @@ export default function Pending() {
             justifyContent: 'center',
             flexWrap: 'wrap'
           }}>
-            <a href="/chat" style={{
+            <a href="/iris" style={{
               backgroundColor: '#1DB954',
               color: '#000',
               border: 'none',
@@ -218,12 +202,24 @@ export default function Pending() {
               cursor: 'pointer',
               textDecoration: 'none'
             }}>
+              📋 Iris Filing Guide
+            </a>
+            <a href="/chat" style={{
+              backgroundColor: 'transparent',
+              color: '#E6EDF3',
+              border: '1px solid #30363D',
+              borderRadius: '10px',
+              padding: '14px 28px',
+              fontSize: '1rem',
+              cursor: 'pointer',
+              textDecoration: 'none'
+            }}>
               💬 Chat Dekhen
             </a>
             <a href="/" style={{
               backgroundColor: 'transparent',
-              color: '#E6EDF3',
-              border: '1px solid #30363D',
+              color: '#8B949E',
+              border: '1px solid #21262D',
               borderRadius: '10px',
               padding: '14px 28px',
               fontSize: '1rem',
@@ -257,4 +253,4 @@ export default function Pending() {
 
     </main>
   )
-        }
+            }
