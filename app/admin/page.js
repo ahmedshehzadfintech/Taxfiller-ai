@@ -21,23 +21,28 @@ export default function AdminPanel() {
   }, [])
 
   const checkAdmin = async () => {
-    const { data } = await supabase.auth.getUser()
-    if (!data.user) {
+    try {
+      const { data } = await supabase.auth.getUser()
+      if (!data.user) {
+        window.location.href = '/login'
+        return
+      }
+      const role = data.user.user_metadata?.role
+      if (role !== 'admin') {
+        window.location.href = '/'
+        return
+      }
+      setUser(data.user)
+      await loadFilings()
+    } catch (error) {
       window.location.href = '/login'
-      return
+    } finally {
+      setLoading(false)
     }
-    const role = data.user.user_metadata?.role
-    if (role !== 'admin') {
-      window.location.href = '/'
-      return
-    }
-    setUser(data.user)
-    loadFilings()
-    setLoading(false)
   }
 
   const loadFilings = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('filings')
       .select('*')
       .order('created_at', { ascending: false })
@@ -95,6 +100,7 @@ export default function AdminPanel() {
     return status
   }
 
+  // LOADING — kuch mat dikhao
   if (loading) {
     return (
       <main style={{
@@ -107,10 +113,13 @@ export default function AdminPanel() {
         fontFamily: 'sans-serif',
         fontSize: '1.2rem'
       }}>
-        ⏳ Loading Admin Panel...
+        ⏳ Checking access...
       </main>
     )
   }
+
+  // AGAR USER NULL — kuch mat dikhao
+  if (!user) return null
 
   return (
     <main style={{
@@ -199,11 +208,8 @@ export default function AdminPanel() {
         {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
           <div>
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '24px' }}>
-              Dashboard
-            </h2>
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '24px' }}>Dashboard</h2>
 
-            {/* STATS */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -232,7 +238,6 @@ export default function AdminPanel() {
               ))}
             </div>
 
-            {/* RECENT FILINGS */}
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: '#8B949E' }}>
               Recent Filings
             </h3>
@@ -271,11 +276,7 @@ export default function AdminPanel() {
                       {new Date(filing.created_at).toLocaleDateString('en-PK')}
                     </div>
                   </div>
-                  <span style={{
-                    color: getStatusColor(filing.status),
-                    fontSize: '0.85rem',
-                    fontWeight: 'bold'
-                  }}>
+                  <span style={{ color: getStatusColor(filing.status), fontSize: '0.85rem', fontWeight: 'bold' }}>
                     {getStatusLabel(filing.status)}
                   </span>
                 </div>
@@ -286,9 +287,11 @@ export default function AdminPanel() {
 
         {/* FILINGS TAB */}
         {activeTab === 'filings' && (
-          <div style={{ display: 'grid', gridTemplateColumns: selectedFiling ? '1fr 1fr' : '1fr', gap: '24px' }}>
-
-            {/* FILING LIST */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: selectedFiling ? '1fr 1fr' : '1fr',
+            gap: '24px'
+          }}>
             <div>
               <h2 style={{ fontSize: '1.4rem', marginBottom: '20px' }}>
                 Sab Filings ({filings.length})
@@ -319,9 +322,7 @@ export default function AdminPanel() {
                       cursor: 'pointer'
                     }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>
-                        #{filing.id.slice(0, 8)}
-                      </span>
+                      <span style={{ fontWeight: 'bold' }}>#{filing.id.slice(0, 8)}</span>
                       <span style={{ color: getStatusColor(filing.status), fontSize: '0.85rem', fontWeight: 'bold' }}>
                         {getStatusLabel(filing.status)}
                       </span>
@@ -329,29 +330,21 @@ export default function AdminPanel() {
                     <div style={{ color: '#8B949E', fontSize: '0.8rem' }}>
                       {new Date(filing.created_at).toLocaleString('en-PK')}
                     </div>
-                    <div style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '4px' }}>
-                      Payment: {filing.payment_method || 'N/A'} — Rs. 1,500
-                    </div>
                   </div>
                 ))
               )}
             </div>
 
-            {/* FILING DETAIL */}
             {selectedFiling && (
               <div style={{
                 backgroundColor: '#161B22',
                 border: '1px solid #21262D',
                 borderRadius: '16px',
                 padding: '24px',
-                height: 'fit-content',
-                position: 'sticky',
-                top: '20px'
+                height: 'fit-content'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>
-                    Filing Detail
-                  </h3>
+                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Filing Detail</h3>
                   <button
                     onClick={() => setSelectedFiling(null)}
                     style={{
@@ -365,7 +358,6 @@ export default function AdminPanel() {
                   </button>
                 </div>
 
-                {/* INFO */}
                 <div style={{
                   backgroundColor: '#0D1117',
                   borderRadius: '10px',
@@ -391,24 +383,6 @@ export default function AdminPanel() {
                   ))}
                 </div>
 
-                {/* CHAT SUMMARY */}
-                {selectedFiling.chat_summary && (
-                  <div style={{
-                    backgroundColor: '#0D1117',
-                    borderRadius: '10px',
-                    padding: '16px',
-                    marginBottom: '16px'
-                  }}>
-                    <div style={{ color: '#8B949E', fontSize: '0.85rem', marginBottom: '8px' }}>
-                      AI Chat Summary:
-                    </div>
-                    <p style={{ fontSize: '0.9rem', lineHeight: '1.5', margin: 0 }}>
-                      {selectedFiling.chat_summary}
-                    </p>
-                  </div>
-                )}
-
-                {/* ACTION BUTTONS */}
                 <div style={{ marginBottom: '16px' }}>
                   <div style={{ color: '#8B949E', fontSize: '0.85rem', marginBottom: '10px' }}>
                     Status Update:
@@ -417,47 +391,34 @@ export default function AdminPanel() {
                     <button
                       onClick={() => updateStatus(selectedFiling.id, 'verified')}
                       style={{
-                        backgroundColor: '#1a3a2a',
-                        color: '#1DB954',
-                        border: '1px solid #1DB954',
-                        borderRadius: '8px',
-                        padding: '8px 16px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem',
-                        fontWeight: 'bold'
+                        backgroundColor: '#1a3a2a', color: '#1DB954',
+                        border: '1px solid #1DB954', borderRadius: '8px',
+                        padding: '8px 16px', cursor: 'pointer',
+                        fontSize: '0.85rem', fontWeight: 'bold'
                       }}>
-                      ✅ Verify Karo
+                      ✅ Verify
                     </button>
                     <button
                       onClick={() => updateStatus(selectedFiling.id, 'pending')}
                       style={{
-                        backgroundColor: '#2a1f0a',
-                        color: '#F0883E',
-                        border: '1px solid #F0883E',
-                        borderRadius: '8px',
-                        padding: '8px 16px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
+                        backgroundColor: '#2a1f0a', color: '#F0883E',
+                        border: '1px solid #F0883E', borderRadius: '8px',
+                        padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem'
                       }}>
                       ⏳ Pending
                     </button>
                     <button
                       onClick={() => updateStatus(selectedFiling.id, 'rejected')}
                       style={{
-                        backgroundColor: '#2a0a0a',
-                        color: '#f85149',
-                        border: '1px solid #f85149',
-                        borderRadius: '8px',
-                        padding: '8px 16px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem'
+                        backgroundColor: '#2a0a0a', color: '#f85149',
+                        border: '1px solid #f85149', borderRadius: '8px',
+                        padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem'
                       }}>
                       ❌ Reject
                     </button>
                   </div>
                 </div>
 
-                {/* MESSAGE TO USER */}
                 <div>
                   <div style={{ color: '#8B949E', fontSize: '0.85rem', marginBottom: '10px' }}>
                     User Ko Message Karo:
@@ -498,15 +459,12 @@ export default function AdminPanel() {
                     💬 Message Bhejo
                   </button>
                 </div>
-
               </div>
             )}
           </div>
         )}
-
       </div>
 
-      {/* FOOTER */}
       <footer style={{
         borderTop: '1px solid #21262D',
         padding: '16px 24px',
@@ -520,4 +478,4 @@ export default function AdminPanel() {
 
     </main>
   )
-         }
+    }
