@@ -36,6 +36,19 @@ export default function Pending() {
         <div style={{ color: '#1DB954', fontSize: '1.5rem', fontWeight: 'bold' }}>
           TaxFiller AI
         </div>
+         <a href="/iris" style={{
+  backgroundColor: '#1DB954',
+  color: '#000',
+  border: 'none',
+  borderRadius: '10px',
+  padding: '14px 28px',
+  fontSize: '1rem',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  textDecoration: 'none'
+}}>
+  📋 Iris Filing Guide Dekhen
+</a>   
         <a href="/chat" style={{
           backgroundColor: 'transparent',
           color: '#8B949E',
