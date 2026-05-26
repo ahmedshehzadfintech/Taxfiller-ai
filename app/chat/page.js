@@ -1,23 +1,26 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
-export default function Chat() {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      role: 'ai',
-      text: 'Assalamu Alaikum! 👋 TaxFiller AI mein khush aamdeed!\n\nMain aapka AI Tax Assistant hoon. Aaj hum milkar aapki FBR tax filing asaan kar dein ge.\n\nKya aap shuru karna chahte hain? 😊',
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    }
-  ])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
+export default function Payment() {
   const [user, setUser] = useState(null)
-  const bottomRef = useRef(null)
+  const [selected, setSelected] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState({ text: '', type: '' })
+
+  // JazzCash fields
+  const [jazzNumber, setJazzNumber] = useState('')
+
+  // Easypaisa fields
+  const [easyNumber, setEasyNumber] = useState('')
+
+  // Card fields
+  const [cardNumber, setCardNumber] = useState('')
+  const [cardName, setCardName] = useState('')
+  const [cardExpiry, setCardExpiry] = useState('')
+  const [cardCvv, setCardCvv] = useState('')
 
   useEffect(() => {
-    // User check
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) {
         window.location.href = '/login'
@@ -27,349 +30,382 @@ export default function Chat() {
     })
   }, [])
 
-  useEffect(() => {
-    // Auto scroll
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  const formatCardNumber = (val) => {
+    return val.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim()
+  }
 
-  const getTime = () =>
-    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  const formatExpiry = (val) => {
+    return val.replace(/\D/g, '').slice(0, 4).replace(/(.{2})/, '$1/')
+  }
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return
+  const handlePayment = async () => {
+    setMessage({ text: '', type: '' })
 
-    const userMsg = {
-      id: messages.length + 1,
-      role: 'user',
-      text: input.trim(),
-      time: getTime()
+    if (!selected) {
+      setMessage({ text: '⚠️ Pehle payment method select karein!', type: 'error' })
+      return
     }
 
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
+    if (selected === 'jazzcash' && jazzNumber.length < 11) {
+      setMessage({ text: '⚠️ Sahi JazzCash number daalo!', type: 'error' })
+      return
+    }
+
+    if (selected === 'easypaisa' && easyNumber.length < 11) {
+      setMessage({ text: '⚠️ Sahi Easypaisa number daalo!', type: 'error' })
+      return
+    }
+
+    if (selected === 'card') {
+      if (cardNumber.replace(/\s/g, '').length < 16) {
+        setMessage({ text: '⚠️ Sahi card number daalo!', type: 'error' })
+        return
+      }
+      if (!cardName) {
+        setMessage({ text: '⚠️ Card par naam likho!', type: 'error' })
+        return
+      }
+      if (cardExpiry.length < 5) {
+        setMessage({ text: '⚠️ Sahi expiry date daalo!', type: 'error' })
+        return
+      }
+      if (cardCvv.length < 3) {
+        setMessage({ text: '⚠️ Sahi CVV daalo!', type: 'error' })
+        return
+      }
+    }
+
     setLoading(true)
 
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: input.trim(),
-          history: messages.map(m => ({
-            role: m.role === 'ai' ? 'model' : 'user',
-            parts: [{ text: m.text }]
-          }))
-        })
-      })
-
-      const data = await response.json()
-
-      setMessages(prev => [...prev, {
-        id: prev.length + 1,
-        role: 'ai',
-        text: data.reply || 'Kuch masla hua — dobara try karein.',
-        time: getTime()
-      }])
-    } catch {
-      setMessages(prev => [...prev, {
-        id: prev.length + 1,
-        role: 'ai',
-        text: '❌ Connection mein masla hua. Dobara try karein.',
-        time: getTime()
-      }])
-    }
-
-    setLoading(false)
+    setTimeout(() => {
+      setLoading(false)
+      window.location.href = '/pending'
+    }, 2000)
   }
 
-  const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
+  const inputStyle = {
+    width: '100%',
+    backgroundColor: '#0D1117',
+    border: '1px solid #30363D',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    color: '#E6EDF3',
+    fontSize: '0.95rem',
+    outline: 'none',
+    boxSizing: 'border-box',
+    marginTop: '8px'
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    window.location.href = '/'
+  const labelStyle = {
+    color: '#8B949E',
+    fontSize: '0.85rem',
+    display: 'block',
+    marginTop: '12px'
   }
+
+  const methods = [
+    { id: 'jazzcash', name: 'JazzCash', icon: '🟠', color: '#FF6B00' },
+    { id: 'easypaisa', name: 'Easypaisa', icon: '🟢', color: '#4CAF50' },
+    { id: 'card', name: 'Debit / Credit Card', icon: '💳', color: '#58A6FF' },
+  ]
 
   return (
     <main style={{
       backgroundColor: '#0D1117',
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
+      minHeight: '100vh',
       fontFamily: 'sans-serif',
-      color: '#E6EDF3'
+      color: '#E6EDF3',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
 
-      {/* HEADER */}
-      <div style={{
-        backgroundColor: '#161B22',
-        borderBottom: '1px solid #21262D',
-        padding: '12px 20px',
+      {/* NAVBAR */}
+      <nav style={{
         display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        gap: '12px'
+        padding: '20px 40px',
+        borderBottom: '1px solid #21262D'
       }}>
-        {/* AI Avatar */}
-        <div style={{
-          width: '42px',
-          height: '42px',
-          borderRadius: '50%',
-          backgroundColor: '#1DB954',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '1.2rem',
-          flexShrink: 0
-        }}>
-          🤖
+        <div style={{ color: '#1DB954', fontSize: '1.5rem', fontWeight: 'bold' }}>
+          TaxFiller AI
         </div>
-
-        {/* AI Info */}
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>
-            TaxFiller AI
-          </div>
-          <div style={{ color: '#1DB954', fontSize: '0.75rem' }}>
-            ● Online — FBR Tax Assistant
-          </div>
+        <div style={{ color: '#8B949E', fontSize: '0.9rem' }}>
+          🔒 Secure Payment
         </div>
+      </nav>
 
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          style={{
-            backgroundColor: 'transparent',
-            color: '#8B949E',
-            border: '1px solid #30363D',
-            borderRadius: '8px',
-            padding: '6px 14px',
-            cursor: 'pointer',
-            fontSize: '0.85rem'
-          }}>
-          Logout
-        </button>
-      </div>
-
-      {/* DATE BADGE */}
-      <div style={{ textAlign: 'center', padding: '12px' }}>
-        <span style={{
-          backgroundColor: '#21262D',
-          color: '#8B949E',
-          fontSize: '0.75rem',
-          padding: '4px 12px',
-          borderRadius: '10px'
-        }}>
-          Aaj
-        </span>
-      </div>
-
-      {/* MESSAGES */}
       <div style={{
         flex: 1,
-        overflowY: 'auto',
-        padding: '0 16px 16px'
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px 20px'
       }}>
-        {messages.map((msg) => (
-          <div key={msg.id} style={{
-            display: 'flex',
-            justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-            marginBottom: '12px'
-          }}>
-            {/* AI Avatar */}
-            {msg.role === 'ai' && (
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                backgroundColor: '#1DB954',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.9rem',
-                marginRight: '8px',
-                flexShrink: 0,
-                alignSelf: 'flex-end'
-              }}>
-                🤖
-              </div>
-            )}
+        <div style={{ width: '100%', maxWidth: '480px' }}>
 
-            {/* Bubble */}
-            <div style={{ maxWidth: '75%' }}>
-              <div style={{
-                backgroundColor: msg.role === 'user' ? '#1DB954' : '#161B22',
-                color: msg.role === 'user' ? '#000' : '#E6EDF3',
-                padding: '10px 14px',
-                borderRadius: msg.role === 'user'
-                  ? '18px 18px 4px 18px'
-                  : '18px 18px 18px 4px',
-                fontSize: '0.95rem',
-                lineHeight: '1.5',
-                whiteSpace: 'pre-wrap',
-                border: msg.role === 'ai' ? '1px solid #21262D' : 'none'
-              }}>
-                {msg.text}
-              </div>
-              <div style={{
-                fontSize: '0.7rem',
-                color: '#8B949E',
-                marginTop: '4px',
-                textAlign: msg.role === 'user' ? 'right' : 'left',
-                paddingLeft: msg.role === 'ai' ? '4px' : '0'
-              }}>
-                {msg.time} {msg.role === 'user' && '✓✓'}
-              </div>
-            </div>
+          {/* HEADER */}
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>💰</div>
+            <h1 style={{ fontSize: '1.6rem', fontWeight: 'bold', marginBottom: '8px' }}>
+              Filing Fee
+            </h1>
+            <p style={{ color: '#8B949E', fontSize: '0.95rem' }}>
+              Payment ke baad aapki filing expert ke paas verify hogi
+            </p>
           </div>
-        ))}
 
-        {/* TYPING INDICATOR */}
-        {loading && (
+          {/* PRICE CARD */}
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px'
+            backgroundColor: '#161B22',
+            border: '1px solid #1DB954',
+            borderRadius: '16px',
+            padding: '24px',
+            textAlign: 'center',
+            marginBottom: '24px'
           }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              backgroundColor: '#1DB954',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.9rem'
-            }}>
-              🤖
+            <div style={{ color: '#8B949E', fontSize: '0.9rem', marginBottom: '8px' }}>
+              Total Amount
             </div>
+            <div style={{ color: '#1DB954', fontSize: '2.8rem', fontWeight: 'bold', marginBottom: '4px' }}>
+              Rs. 1,500
+            </div>
+            <div style={{ color: '#8B949E', fontSize: '0.85rem' }}>
+              Salary Tax Filing — FBR 2025-26
+            </div>
+
             <div style={{
-              backgroundColor: '#161B22',
-              border: '1px solid #21262D',
-              borderRadius: '18px 18px 18px 4px',
-              padding: '12px 16px',
-              display: 'flex',
-              gap: '4px',
-              alignItems: 'center'
+              marginTop: '20px',
+              borderTop: '1px solid #21262D',
+              paddingTop: '16px',
+              textAlign: 'left'
             }}>
-              {[0, 1, 2].map(i => (
-                <div key={i} style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: '#1DB954',
-                  animation: 'bounce 1.2s infinite',
-                  animationDelay: `${i * 0.2}s`
-                }} />
+              {[
+                '✅ AI Tax Calculation',
+                '✅ Expert Human Verification',
+                '✅ Step-by-step Iris Filing Guide',
+                '✅ PDF Report Generation',
+                '✅ Support via Chat',
+              ].map((item, i) => (
+                <div key={i} style={{ color: '#E6EDF3', fontSize: '0.9rem', marginBottom: '8px' }}>
+                  {item}
+                </div>
               ))}
             </div>
+
+            <div style={{
+              marginTop: '16px',
+              backgroundColor: '#0D1117',
+              borderRadius: '8px',
+              padding: '10px',
+              color: '#8B949E',
+              fontSize: '0.8rem'
+            }}>
+              🛡️ Kaam na hua to full refund — hamari guarantee!
+            </div>
           </div>
-        )}
 
-        <div ref={bottomRef} />
+          {/* PAYMENT METHODS */}
+          <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: '#8B949E' }}>
+            Payment Method Select Karein:
+          </h3>
+
+          {methods.map((method) => (
+            <div key={method.id}>
+              <div
+                onClick={() => { setSelected(method.id); setMessage({ text: '', type: '' }) }}
+                style={{
+                  backgroundColor: selected === method.id ? '#161B22' : '#0D1117',
+                  border: `2px solid ${selected === method.id ? method.color : '#21262D'}`,
+                  borderRadius: selected === method.id ? '12px 12px 0 0' : '12px',
+                  padding: '16px 20px',
+                  marginBottom: selected === method.id ? '0' : '12px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px'
+                }}>
+                <div style={{
+                  width: '20px', height: '20px', borderRadius: '50%',
+                  border: `2px solid ${selected === method.id ? method.color : '#8B949E'}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {selected === method.id && (
+                    <div style={{
+                      width: '10px', height: '10px',
+                      borderRadius: '50%', backgroundColor: method.color
+                    }} />
+                  )}
+                </div>
+                <div style={{ fontSize: '1.8rem' }}>{method.icon}</div>
+                <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>{method.name}</div>
+              </div>
+
+              {/* JAZZCASH FIELDS */}
+              {selected === 'jazzcash' && method.id === 'jazzcash' && (
+                <div style={{
+                  backgroundColor: '#161B22',
+                  border: '2px solid #FF6B00',
+                  borderTop: 'none',
+                  borderRadius: '0 0 12px 12px',
+                  padding: '16px 20px',
+                  marginBottom: '12px'
+                }}>
+                  <label style={labelStyle}>JazzCash Mobile Number</label>
+                  <input
+                    type="tel"
+                    placeholder="03XX-XXXXXXX"
+                    maxLength={11}
+                    value={jazzNumber}
+                    onChange={(e) => setJazzNumber(e.target.value.replace(/\D/g, ''))}
+                    style={inputStyle}
+                  />
+                  <p style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '8px' }}>
+                    📱 Aapke JazzCash number par payment request aayegi
+                  </p>
+                </div>
+              )}
+
+              {/* EASYPAISA FIELDS */}
+              {selected === 'easypaisa' && method.id === 'easypaisa' && (
+                <div style={{
+                  backgroundColor: '#161B22',
+                  border: '2px solid #4CAF50',
+                  borderTop: 'none',
+                  borderRadius: '0 0 12px 12px',
+                  padding: '16px 20px',
+                  marginBottom: '12px'
+                }}>
+                  <label style={labelStyle}>Easypaisa Mobile Number</label>
+                  <input
+                    type="tel"
+                    placeholder="03XX-XXXXXXX"
+                    maxLength={11}
+                    value={easyNumber}
+                    onChange={(e) => setEasyNumber(e.target.value.replace(/\D/g, ''))}
+                    style={inputStyle}
+                  />
+                  <p style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '8px' }}>
+                    📱 Aapke Easypaisa number par payment request aayegi
+                  </p>
+                </div>
+              )}
+
+              {/* CARD FIELDS */}
+              {selected === 'card' && method.id === 'card' && (
+                <div style={{
+                  backgroundColor: '#161B22',
+                  border: '2px solid #58A6FF',
+                  borderTop: 'none',
+                  borderRadius: '0 0 12px 12px',
+                  padding: '16px 20px',
+                  marginBottom: '12px'
+                }}>
+                  <label style={labelStyle}>Card Number</label>
+                  <input
+                    type="text"
+                    placeholder="1234 5678 9012 3456"
+                    value={cardNumber}
+                    onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                    style={inputStyle}
+                  />
+
+                  <label style={labelStyle}>Card Par Naam</label>
+                  <input
+                    type="text"
+                    placeholder="Ahmed Shehzad"
+                    value={cardName}
+                    onChange={(e) => setCardName(e.target.value)}
+                    style={inputStyle}
+                  />
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={labelStyle}>Expiry Date</label>
+                      <input
+                        type="text"
+                        placeholder="MM/YY"
+                        value={cardExpiry}
+                        onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={labelStyle}>CVV</label>
+                      <input
+                        type="password"
+                        placeholder="•••"
+                        maxLength={3}
+                        value={cardCvv}
+                        onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+
+                  <p style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '8px' }}>
+                    🔒 Aapka card data secure hai — kabhi save nahi hoga
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* MESSAGE */}
+          {message.text && (
+            <div style={{
+              backgroundColor: '#3a1a1a',
+              border: '1px solid #f85149',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              marginBottom: '16px',
+              color: '#f85149',
+              fontSize: '0.9rem',
+              textAlign: 'center'
+            }}>
+              {message.text}
+            </div>
+          )}
+
+          {/* PAY BUTTON */}
+          <button
+            onClick={handlePayment}
+            disabled={loading}
+            style={{
+              width: '100%',
+              backgroundColor: loading ? '#158a3e' : '#1DB954',
+              color: '#000',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '16px',
+              fontSize: '1.1rem',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              marginTop: '8px',
+              marginBottom: '16px'
+            }}>
+            {loading ? '⏳ Processing...' : 'Rs. 1,500 — Abhi Pay Karein →'}
+          </button>
+
+          <div style={{ textAlign: 'center', color: '#8B949E', fontSize: '0.8rem' }}>
+            🔒 256-bit SSL encryption — aapka data bilkul safe hai
+          </div>
+
+        </div>
       </div>
-{/* PAYMENT BUTTON */}
-<div style={{
-  padding: '8px 16px',
-  backgroundColor: '#161B22',
-  borderTop: '1px solid #21262D',
-  textAlign: 'center'
-}}>
-  <a href="/payment" style={{
-    backgroundColor: '#1DB954',
-    color: '#000',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '10px 24px',
-    fontSize: '0.9rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    textDecoration: 'none'
-  }}>
-    Filing Submit Karein — Payment Karein →
-  </a>
-</div>
-      {/* INPUT BOX */}
-      <div style={{
-        backgroundColor: '#161B22',
+
+      {/* FOOTER */}
+      <footer style={{
         borderTop: '1px solid #21262D',
-        padding: '12px 16px',
-        display: 'flex',
-        alignItems: 'flex-end',
-        gap: '10px'
+        padding: '16px 40px',
+        textAlign: 'center',
+        color: '#8B949E',
+        fontSize: '0.8rem'
       }}>
-        {/* Upload Button */}
-        <button style={{
-          backgroundColor: '#21262D',
-          border: '1px solid #30363D',
-          borderRadius: '50%',
-          width: '42px',
-          height: '42px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          fontSize: '1.1rem',
-          flexShrink: 0
-        }}>
-          📎
-        </button>
-
-        {/* Text Input */}
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKey}
-          placeholder="Message likhein..."
-          rows={1}
-          style={{
-            flex: 1,
-            backgroundColor: '#21262D',
-            border: '1px solid #30363D',
-            borderRadius: '20px',
-            padding: '10px 16px',
-            color: '#E6EDF3',
-            fontSize: '0.95rem',
-            outline: 'none',
-            resize: 'none',
-            fontFamily: 'sans-serif',
-            lineHeight: '1.5'
-          }}
-        />
-
-        {/* Send Button */}
-        <button
-          onClick={sendMessage}
-          disabled={!input.trim() || loading}
-          style={{
-            backgroundColor: input.trim() ? '#1DB954' : '#21262D',
-            border: 'none',
-            borderRadius: '50%',
-            width: '42px',
-            height: '42px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: input.trim() ? 'pointer' : 'not-allowed',
-            fontSize: '1.1rem',
-            flexShrink: 0,
-            transition: 'background 0.2s'
-          }}>
-          ➤
-        </button>
-      </div>
-
-      <style>{`
-        @keyframes bounce {
-          0%, 60%, 100% { transform: translateY(0); }
-          30% { transform: translateY(-6px); }
-        }
-      `}</style>
+        © 2026 TaxFiller AI — Ahmed Shehzad Tax AI | Pakistan
+      </footer>
 
     </main>
   )
-        }
+  }
