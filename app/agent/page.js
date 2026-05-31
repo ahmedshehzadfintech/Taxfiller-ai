@@ -43,7 +43,7 @@ export default function AgentPanel() {
   }
 
   const loadClients = async (agentId) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('agent_clients')
       .select('*')
       .eq('agent_id', agentId)
@@ -56,13 +56,23 @@ export default function AgentPanel() {
       setMessage({ text: 'Naam aur CNIC zaroori hai!', type: 'error' })
       return
     }
-    const { error } = await supabase
+
+    const { data, error } = await supabase
       .from('agent_clients')
-      .insert({ agent_id: user.id, ...newClient })
+      .insert({
+        agent_id: user.id,
+        client_name: newClient.client_name,
+        client_cnic: newClient.client_cnic,
+        client_phone: newClient.client_phone,
+        client_email: newClient.client_email
+      })
+      .select()
+
     if (error) {
-      setMessage({ text: 'Client add nahi hua!', type: 'error' })
+      setMessage({ text: 'Error: ' + error.message, type: 'error' })
       return
     }
+
     setMessage({ text: 'Client add ho gaya!', type: 'success' })
     setNewClient({ client_name: '', client_cnic: '', client_phone: '', client_email: '' })
     setShowAddClient(false)
@@ -204,7 +214,6 @@ export default function AgentPanel() {
               Agent Dashboard
             </h2>
 
-            {/* STATS */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -232,7 +241,6 @@ export default function AgentPanel() {
               ))}
             </div>
 
-            {/* QUICK ADD */}
             <div style={{
               backgroundColor: '#161B22',
               border: '1px solid #1DB954',
@@ -262,7 +270,6 @@ export default function AgentPanel() {
               </button>
             </div>
 
-            {/* RECENT CLIENTS */}
             <h3 style={{ color: '#8B949E', marginBottom: '16px' }}>Recent Clients</h3>
             {clients.length === 0 ? (
               <div style={{
@@ -337,7 +344,6 @@ export default function AgentPanel() {
               </button>
             </div>
 
-            {/* ADD CLIENT FORM */}
             {showAddClient && (
               <div style={{
                 backgroundColor: '#161B22',
@@ -413,7 +419,10 @@ export default function AgentPanel() {
                     Client Add Karein
                   </button>
                   <button
-                    onClick={() => { setShowAddClient(false); setMessage({ text: '', type: '' }) }}
+                    onClick={() => {
+                      setShowAddClient(false)
+                      setMessage({ text: '', type: '' })
+                    }}
                     style={{
                       flex: 1,
                       backgroundColor: 'transparent',
@@ -429,8 +438,7 @@ export default function AgentPanel() {
               </div>
             )}
 
-            {/* CLIENT LIST */}
-            {clients.length === 0 ? (
+            {clients.length === 0 && !showAddClient ? (
               <div style={{
                 backgroundColor: '#161B22',
                 border: '1px solid #21262D',
@@ -445,7 +453,9 @@ export default function AgentPanel() {
               clients.map(client => (
                 <div key={client.id} style={{ marginBottom: '12px' }}>
                   <div
-                    onClick={() => setSelectedClient(selectedClient?.id === client.id ? null : client)}
+                    onClick={() => setSelectedClient(
+                      selectedClient?.id === client.id ? null : client
+                    )}
                     style={{
                       backgroundColor: selectedClient?.id === client.id ? '#1a2a3a' : '#161B22',
                       border: '1px solid ' + (selectedClient?.id === client.id ? '#58A6FF' : '#21262D'),
@@ -547,4 +557,4 @@ export default function AgentPanel() {
 
     </main>
   )
-    }
+}
