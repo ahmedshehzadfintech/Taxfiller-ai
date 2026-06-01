@@ -27,33 +27,86 @@ export default function Chat() {
     setUser(data.user)
     await loadMessages(data.user.id)
     setPageLoading(false)
+
+    // Real time admin messages listen karo
+    const channel = supabase
+      .channel('admin-messages')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'admin_messages',
+        filter: `user_id=eq.${data.user.id}`
+      }, (payload) => {
+        const newMsg = {
+          id: payload.new.id,
+          role: 'ai',
+          text: '👨‍💼 Admin: ' + payload.new.message,
+          time: new Date(payload.new.created_at).toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit'
+          })
+        }
+        setMessages(prev => [...prev, newMsg])
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }
 
   const loadMessages = async (userId) => {
-    const { data } = await supabase
+    // Chat messages load karo
+    const { data: chatData } = await supabase
       .from('chat_messages')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: true })
 
-    if (data && data.length > 0) {
-      setMessages(data.map(msg => ({
+    // Admin messages load karo
+    const { data: adminData } = await supabase
+      .from('admin_messages')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+
+    let allMessages = []
+
+    if (chatData && chatData.length > 0) {
+      const chatMsgs = chatData.map(msg => ({
         id: msg.id,
         role: msg.role,
         text: msg.message,
         time: new Date(msg.created_at).toLocaleTimeString('en-US', {
           hour: '2-digit', minute: '2-digit'
-        })
-      })))
+        }),
+        createdAt: new Date(msg.created_at)
+      }))
+      allMessages = [...allMessages, ...chatMsgs]
+    }
+
+    if (adminData && adminData.length > 0) {
+      const adminMsgs = adminData.map(msg => ({
+        id: 'admin-' + msg.id,
+        role: 'ai',
+        text: '👨‍💼 Admin: ' + msg.message,
+        time: new Date(msg.created_at).toLocaleTimeString('en-US', {
+          hour: '2-digit', minute: '2-digit'
+        }),
+        createdAt: new Date(msg.created_at)
+      }))
+      allMessages = [...allMessages, ...adminMsgs]
+    }
+
+    // Time ke hisaab se sort karo
+    allMessages.sort((a, b) => a.createdAt - b.createdAt)
+
+    if (allMessages.length > 0) {
+      setMessages(allMessages)
     } else {
-      // Pehli baar — welcome message
-      const welcomeMsg = {
+      setMessages([{
         id: 'welcome',
         role: 'ai',
         text: 'Assalamu Alaikum! TaxFiller AI mein khush aamdeed!\n\nMain aapka AI Tax Assistant hoon. Aaj hum milkar aapki FBR tax filing asaan kar dein ge.\n\nKya aap shuru karna chahte hain?',
         time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      }
-      setMessages([welcomeMsg])
+      }])
     }
   }
 
@@ -84,7 +137,6 @@ export default function Chat() {
     setInput('')
     setLoading(true)
 
-    // Supabase mein save karo
     await saveMessage(user.id, 'user', userText)
 
     try {
@@ -111,18 +163,15 @@ export default function Chat() {
       }
 
       setMessages(prev => [...prev, aiMsg])
-
-      // AI message bhi save karo
       await saveMessage(user.id, 'ai', aiText)
 
     } catch {
-      const errMsg = {
+      setMessages(prev => [...prev, {
         id: Date.now() + 1,
         role: 'ai',
         text: 'Connection mein masla hua. Dobara try karein.',
         time: getTime()
-      }
-      setMessages(prev => [...prev, errMsg])
+      }])
     }
 
     setLoading(false)
@@ -347,4 +396,4 @@ export default function Chat() {
 
     </main>
   )
-      }
+          }
