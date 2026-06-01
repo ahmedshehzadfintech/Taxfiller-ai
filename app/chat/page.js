@@ -8,6 +8,8 @@ export default function Chat() {
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState(null)
   const [pageLoading, setPageLoading] = useState(true)
+  // 1. Nayi State Add Ho Gayi
+  const [hasFiling, setHasFiling] = useState(false) 
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -27,6 +29,16 @@ export default function Chat() {
     setUser(data.user)
     await loadMessages(data.user.id)
     setPageLoading(false)
+
+    // 2. Filing Check (Pro Fix - maybeSingle ke sath)
+    const { data: filingData } = await supabase
+      .from('filings')
+      .select('id')
+      .eq('user_id', data.user.id)
+      .limit(1)
+      .maybeSingle()
+
+    setHasFiling(!!filingData)
 
     // Real time admin messages listen karo
     const channel = supabase
@@ -327,20 +339,21 @@ export default function Chat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* PAYMENT BUTTON */}
+      {/* 3. DYNAMIC PAYMENT BUTTON */}
       <div style={{
         padding: '8px 16px',
         backgroundColor: '#161B22',
         borderTop: '1px solid #21262D',
         textAlign: 'center'
       }}>
-        <a href="/payment" style={{
+        <a href={hasFiling ? '/pending' : '/payment'} style={{
           backgroundColor: '#1DB954', color: '#000',
           border: 'none', borderRadius: '8px',
           padding: '10px 24px', fontSize: '0.9rem',
-          fontWeight: 'bold', cursor: 'pointer', textDecoration: 'none'
+          fontWeight: 'bold', cursor: 'pointer', textDecoration: 'none',
+          display: 'inline-block'
         }}>
-          Filing Submit Karein — Payment Karein →
+          {hasFiling ? 'Filing Status Dekhein →' : 'Filing Submit Karein — Payment Karein →'}
         </a>
       </div>
 
@@ -396,4 +409,4 @@ export default function Chat() {
 
     </main>
   )
-          }
+}
