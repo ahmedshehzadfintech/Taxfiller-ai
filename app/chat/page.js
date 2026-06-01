@@ -3,32 +3,67 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 
 export default function Chat() {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      role: 'ai',
-      text: 'Assalamu Alaikum! 👋 TaxFiller AI mein khush aamdeed!\n\nMain aapka AI Tax Assistant hoon. Aaj hum milkar aapki FBR tax filing asaan kar dein ge.\n\nKya aap shuru karna chahte hain? 😊',
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    }
-  ])
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [user, setUser] = useState(null)
+  const [pageLoading, setPageLoading] = useState(true)
   const bottomRef = useRef(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        window.location.href = '/login'
-      } else {
-        setUser(data.user)
-      }
-    })
+    checkUser()
   }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const checkUser = async () => {
+    const { data } = await supabase.auth.getUser()
+    if (!data.user) {
+      window.location.href = '/login'
+      return
+    }
+    setUser(data.user)
+    await loadMessages(data.user.id)
+    setPageLoading(false)
+  }
+
+  const loadMessages = async (userId) => {
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+
+    if (data && data.length > 0) {
+      setMessages(data.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        text: msg.message,
+        time: new Date(msg.created_at).toLocaleTimeString('en-US', {
+          hour: '2-digit', minute: '2-digit'
+        })
+      })))
+    } else {
+      // Pehli baar — welcome message
+      const welcomeMsg = {
+        id: 'welcome',
+        role: 'ai',
+        text: 'Assalamu Alaikum! TaxFiller AI mein khush aamdeed!\n\nMain aapka AI Tax Assistant hoon. Aaj hum milkar aapki FBR tax filing asaan kar dein ge.\n\nKya aap shuru karna chahte hain?',
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      }
+      setMessages([welcomeMsg])
+    }
+  }
+
+  const saveMessage = async (userId, role, message) => {
+    await supabase.from('chat_messages').insert({
+      user_id: userId,
+      role: role,
+      message: message
+    })
+  }
 
   const getTime = () =>
     new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -36,10 +71,12 @@ export default function Chat() {
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
+    const userText = input.trim()
+
     const userMsg = {
-      id: messages.length + 1,
+      id: Date.now(),
       role: 'user',
-      text: input.trim(),
+      text: userText,
       time: getTime()
     }
 
@@ -47,12 +84,15 @@ export default function Chat() {
     setInput('')
     setLoading(true)
 
+    // Supabase mein save karo
+    await saveMessage(user.id, 'user', userText)
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: input.trim(),
+          message: userText,
           history: messages.map(m => ({
             role: m.role === 'ai' ? 'model' : 'user',
             parts: [{ text: m.text }]
@@ -61,20 +101,28 @@ export default function Chat() {
       })
 
       const data = await response.json()
+      const aiText = data.reply || 'Kuch masla hua — dobara try karein.'
 
-      setMessages(prev => [...prev, {
-        id: prev.length + 1,
+      const aiMsg = {
+        id: Date.now() + 1,
         role: 'ai',
-        text: data.reply || 'Kuch masla hua — dobara try karein.',
+        text: aiText,
         time: getTime()
-      }])
+      }
+
+      setMessages(prev => [...prev, aiMsg])
+
+      // AI message bhi save karo
+      await saveMessage(user.id, 'ai', aiText)
+
     } catch {
-      setMessages(prev => [...prev, {
-        id: prev.length + 1,
+      const errMsg = {
+        id: Date.now() + 1,
         role: 'ai',
-        text: '❌ Connection mein masla hua. Dobara try karein.',
+        text: 'Connection mein masla hua. Dobara try karein.',
         time: getTime()
-      }])
+      }
+      setMessages(prev => [...prev, errMsg])
     }
 
     setLoading(false)
@@ -90,6 +138,23 @@ export default function Chat() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     window.location.href = '/'
+  }
+
+  if (pageLoading) {
+    return (
+      <main style={{
+        backgroundColor: '#0D1117',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#1DB954',
+        fontFamily: 'sans-serif',
+        fontSize: '1.2rem'
+      }}>
+        Loading...
+      </main>
+    )
   }
 
   return (
