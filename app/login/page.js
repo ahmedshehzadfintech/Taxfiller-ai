@@ -14,55 +14,59 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
-  // ── VALIDATION ──────────────────────────────────────────
   const validate = () => {
     if (!email || !password) {
-      setMessage({ text: '⚠️ Email aur password zaroori hai!', type: 'error' })
+      setMessage({ text: 'Email aur password zaroori hai!', type: 'error' })
       return false
     }
     if (!/\S+@\S+\.\S+/.test(email)) {
-      setMessage({ text: '⚠️ Sahi email likho!', type: 'error' })
+      setMessage({ text: 'Sahi email likho!', type: 'error' })
       return false
     }
     if (password.length < 6) {
-      setMessage({ text: '⚠️ Password kam az kam 6 characters ka hona chahiye!', type: 'error' })
+      setMessage({ text: 'Password kam az kam 6 characters ka hona chahiye!', type: 'error' })
       return false
     }
     if (!isLogin) {
       if (!name) {
-        setMessage({ text: '⚠️ Apna naam likho!', type: 'error' })
+        setMessage({ text: 'Apna naam likho!', type: 'error' })
         return false
       }
       if (password !== confirmPassword) {
-        setMessage({ text: '⚠️ Dono passwords match nahi kar rahe!', type: 'error' })
+        setMessage({ text: 'Dono passwords match nahi kar rahe!', type: 'error' })
         return false
       }
     }
     return true
   }
 
-  // ── SUBMIT ───────────────────────────────────────────────
+  const redirectByRole = (role) => {
+    if (role === 'admin') {
+      window.location.href = '/admin'
+    } else if (role === 'agent') {
+      window.location.href = '/agent'
+    } else {
+      window.location.href = '/chat'
+    }
+  }
+
   const handleSubmit = async () => {
     setMessage({ text: '', type: '' })
     if (!validate()) return
-
     setLoading(true)
 
     try {
       if (isLogin) {
-        // LOGIN
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password
         })
         if (error) throw error
-        setMessage({ text: '✅ Login kamyab! Redirect ho raha hai...', type: 'success' })
-        setTimeout(() => {
-          window.location.href = '/chat'
-        }, 1500)
+        const role = data.user?.user_metadata?.role
+        setMessage({ text: 'Login kamyab! Redirect ho raha hai...', type: 'success' })
+        setTimeout(() => redirectByRole(role), 1000)
 
       } else {
-        // SIGNUP
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -71,7 +75,7 @@ export default function Login() {
           }
         })
         if (error) throw error
-        setMessage({ text: '🎉 Account ban gaya! Ab login karein.', type: 'success' })
+        setMessage({ text: 'Account ban gaya! Ab login karein.', type: 'success' })
         setTimeout(() => {
           setIsLogin(true)
           setPassword('')
@@ -80,19 +84,18 @@ export default function Login() {
       }
     } catch (error) {
       const msgs = {
-        'Invalid login credentials': '❌ Email ya password galat hai!',
-        'User already registered': '❌ Ye email pehle se registered hai!',
-        'Password should be at least 6 characters': '❌ Password 6 characters ka hona chahiye!',
+        'Invalid login credentials': 'Email ya password galat hai!',
+        'User already registered': 'Ye email pehle se registered hai!',
+        'Password should be at least 6 characters': 'Password 6 characters ka hona chahiye!',
       }
       setMessage({
-        text: msgs[error.message] || '❌ Kuch masla hua: ' + error.message,
+        text: msgs[error.message] || 'Kuch masla hua: ' + error.message,
         type: 'error'
       })
     }
     setLoading(false)
   }
 
-  // ── STYLES ───────────────────────────────────────────────
   const inputStyle = {
     width: '100%',
     backgroundColor: '#0D1117',
@@ -194,9 +197,7 @@ export default function Login() {
               TaxFiller AI
             </div>
             <p style={{ color: '#8B949E', fontSize: '0.9rem' }}>
-              {isLogin
-                ? 'Apne account mein login karein'
-                : 'Naya account banayein — bilkul free'}
+              {isLogin ? 'Apne account mein login karein' : 'Naya account banayein'}
             </p>
           </div>
 
@@ -211,10 +212,7 @@ export default function Login() {
             {['Login', 'Signup'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => {
-                  setIsLogin(tab === 'Login')
-                  setMessage({ text: '', type: '' })
-                }}
+                onClick={() => { setIsLogin(tab === 'Login'); setMessage({ text: '', type: '' }) }}
                 style={{
                   flex: 1,
                   padding: '10px',
@@ -223,17 +221,15 @@ export default function Login() {
                   cursor: 'pointer',
                   fontWeight: 'bold',
                   fontSize: '0.95rem',
-                  backgroundColor:
-                    (tab === 'Login') === isLogin ? '#1DB954' : 'transparent',
-                  color:
-                    (tab === 'Login') === isLogin ? '#000' : '#8B949E'
+                  backgroundColor: (tab === 'Login') === isLogin ? '#1DB954' : 'transparent',
+                  color: (tab === 'Login') === isLogin ? '#000' : '#8B949E'
                 }}>
                 {tab}
               </button>
             ))}
           </div>
 
-          {/* NAME — signup only */}
+          {/* NAME */}
           {!isLogin && (
             <div style={{ marginBottom: '16px' }}>
               <label style={labelStyle}>Aapka Naam</label>
@@ -270,15 +266,13 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 style={{ ...inputStyle, paddingRight: '44px' }}
               />
-              <span
-                onClick={() => setShowPassword(!showPassword)}
-                style={eyeStyle}>
+              <span onClick={() => setShowPassword(!showPassword)} style={eyeStyle}>
                 {showPassword ? '🙈' : '👁️'}
               </span>
             </div>
           </div>
 
-          {/* CONFIRM PASSWORD — signup only */}
+          {/* CONFIRM PASSWORD */}
           {!isLogin && (
             <div style={{ marginBottom: '16px' }}>
               <label style={labelStyle}>Password Dobara Likho</label>
@@ -290,28 +284,23 @@ export default function Login() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   style={{ ...inputStyle, paddingRight: '44px' }}
                 />
-                <span
-                  onClick={() => setShowConfirm(!showConfirm)}
-                  style={eyeStyle}>
+                <span onClick={() => setShowConfirm(!showConfirm)} style={eyeStyle}>
                   {showConfirm ? '🙈' : '👁️'}
                 </span>
               </div>
-              {/* password match indicator */}
               {confirmPassword && (
                 <p style={{
                   fontSize: '0.8rem',
                   marginTop: '6px',
                   color: password === confirmPassword ? '#1DB954' : '#f85149'
                 }}>
-                  {password === confirmPassword
-                    ? '✅ Passwords match kar rahe hain!'
-                    : '❌ Passwords match nahi kar rahe!'}
+                  {password === confirmPassword ? '✅ Match!' : '❌ Match nahi!'}
                 </p>
               )}
             </div>
           )}
 
-          {/* MESSAGE BOX */}
+          {/* MESSAGE */}
           {message.text && (
             <div style={{
               backgroundColor: message.type === 'success' ? '#1a3a2a' : '#3a1a1a',
@@ -327,7 +316,7 @@ export default function Login() {
             </div>
           )}
 
-          {/* SUBMIT BUTTON */}
+          {/* BUTTON */}
           <button
             onClick={handleSubmit}
             disabled={loading}
@@ -343,30 +332,15 @@ export default function Login() {
               cursor: loading ? 'not-allowed' : 'pointer',
               marginBottom: '20px'
             }}>
-            {loading
-              ? '⏳ Thoda wait karein...'
-              : isLogin ? 'Login Karein →' : 'Account Banayein →'}
+            {loading ? 'Thoda wait karein...' : isLogin ? 'Login Karein →' : 'Account Banayein →'}
           </button>
 
           {/* SWITCH */}
-          <div style={{
-            textAlign: 'center',
-            color: '#8B949E',
-            fontSize: '0.85rem',
-            marginBottom: '16px'
-          }}>
+          <div style={{ textAlign: 'center', color: '#8B949E', fontSize: '0.85rem', marginBottom: '16px' }}>
             {isLogin ? 'Abhi account nahi hai?' : 'Pehle se account hai?'}
             <span
-              onClick={() => {
-                setIsLogin(!isLogin)
-                setMessage({ text: '', type: '' })
-              }}
-              style={{
-                color: '#1DB954',
-                cursor: 'pointer',
-                marginLeft: '6px',
-                fontWeight: 'bold'
-              }}>
+              onClick={() => { setIsLogin(!isLogin); setMessage({ text: '', type: '' }) }}
+              style={{ color: '#1DB954', cursor: 'pointer', marginLeft: '6px', fontWeight: 'bold' }}>
               {isLogin ? 'Signup karein' : 'Login karein'}
             </span>
           </div>
@@ -398,4 +372,4 @@ export default function Login() {
 
     </main>
   )
-    }
+}
