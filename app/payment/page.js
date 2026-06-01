@@ -7,14 +7,8 @@ export default function Payment() {
   const [selected, setSelected] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ text: '', type: '' })
-
-  // JazzCash fields
   const [jazzNumber, setJazzNumber] = useState('')
-
-  // Easypaisa fields
   const [easyNumber, setEasyNumber] = useState('')
-
-  // Card fields
   const [cardNumber, setCardNumber] = useState('')
   const [cardName, setCardName] = useState('')
   const [cardExpiry, setCardExpiry] = useState('')
@@ -42,45 +36,80 @@ export default function Payment() {
     setMessage({ text: '', type: '' })
 
     if (!selected) {
-      setMessage({ text: '⚠️ Pehle payment method select karein!', type: 'error' })
+      setMessage({ text: 'Pehle payment method select karein!', type: 'error' })
       return
     }
 
     if (selected === 'jazzcash' && jazzNumber.length < 11) {
-      setMessage({ text: '⚠️ Sahi JazzCash number daalo!', type: 'error' })
+      setMessage({ text: 'Sahi JazzCash number daalo!', type: 'error' })
       return
     }
 
     if (selected === 'easypaisa' && easyNumber.length < 11) {
-      setMessage({ text: '⚠️ Sahi Easypaisa number daalo!', type: 'error' })
+      setMessage({ text: 'Sahi Easypaisa number daalo!', type: 'error' })
       return
     }
 
     if (selected === 'card') {
       if (cardNumber.replace(/\s/g, '').length < 16) {
-        setMessage({ text: '⚠️ Sahi card number daalo!', type: 'error' })
+        setMessage({ text: 'Sahi card number daalo!', type: 'error' })
         return
       }
       if (!cardName) {
-        setMessage({ text: '⚠️ Card par naam likho!', type: 'error' })
+        setMessage({ text: 'Card par naam likho!', type: 'error' })
         return
       }
       if (cardExpiry.length < 5) {
-        setMessage({ text: '⚠️ Sahi expiry date daalo!', type: 'error' })
+        setMessage({ text: 'Sahi expiry date daalo!', type: 'error' })
         return
       }
       if (cardCvv.length < 3) {
-        setMessage({ text: '⚠️ Sahi CVV daalo!', type: 'error' })
+        setMessage({ text: 'Sahi CVV daalo!', type: 'error' })
         return
       }
     }
 
     setLoading(true)
 
-    setTimeout(() => {
+    try {
+      // Chat history se summary lo
+      const { data: chatData } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+
+      const chatSummary = chatData
+        ? chatData.map(m => `${m.role}: ${m.message}`).join('\n')
+        : ''
+
+      // Filing Supabase mein save karo
+      const { error } = await supabase
+        .from('filings')
+        .insert({
+          user_id: user.id,
+          status: 'pending',
+          payment_method: selected,
+          payment_status: 'paid',
+          chat_summary: chatSummary
+        })
+
+      if (error) {
+        setMessage({ text: 'Filing save nahi hui: ' + error.message, type: 'error' })
+        setLoading(false)
+        return
+      }
+
+      setMessage({ text: 'Payment kamyab! Redirect ho raha hai...', type: 'success' })
+
+      setTimeout(() => {
+        window.location.href = '/pending'
+      }, 1500)
+
+    } catch (err) {
+      setMessage({ text: 'Kuch masla hua!', type: 'error' })
       setLoading(false)
-      window.location.href = '/pending'
-    }, 2000)
+    }
   }
 
   const inputStyle = {
@@ -181,14 +210,14 @@ export default function Payment() {
               textAlign: 'left'
             }}>
               {[
-                '✅ AI Tax Calculation',
-                '✅ Expert Human Verification',
-                '✅ Step-by-step Iris Filing Guide',
-                '✅ PDF Report Generation',
-                '✅ Support via Chat',
+                'AI Tax Calculation',
+                'Expert Human Verification',
+                'Step-by-step Iris Filing Guide',
+                'PDF Report Generation',
+                'Support via Chat',
               ].map((item, i) => (
                 <div key={i} style={{ color: '#E6EDF3', fontSize: '0.9rem', marginBottom: '8px' }}>
-                  {item}
+                  ✅ {item}
                 </div>
               ))}
             </div>
@@ -232,17 +261,14 @@ export default function Payment() {
                   flexShrink: 0
                 }}>
                   {selected === method.id && (
-                    <div style={{
-                      width: '10px', height: '10px',
-                      borderRadius: '50%', backgroundColor: method.color
-                    }} />
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: method.color }} />
                   )}
                 </div>
                 <div style={{ fontSize: '1.8rem' }}>{method.icon}</div>
                 <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>{method.name}</div>
               </div>
 
-              {/* JAZZCASH FIELDS */}
+              {/* JAZZCASH */}
               {selected === 'jazzcash' && method.id === 'jazzcash' && (
                 <div style={{
                   backgroundColor: '#161B22',
@@ -262,12 +288,12 @@ export default function Payment() {
                     style={inputStyle}
                   />
                   <p style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '8px' }}>
-                    📱 Aapke JazzCash number par payment request aayegi
+                    Aapke JazzCash number par payment request aayegi
                   </p>
                 </div>
               )}
 
-              {/* EASYPAISA FIELDS */}
+              {/* EASYPAISA */}
               {selected === 'easypaisa' && method.id === 'easypaisa' && (
                 <div style={{
                   backgroundColor: '#161B22',
@@ -287,12 +313,12 @@ export default function Payment() {
                     style={inputStyle}
                   />
                   <p style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '8px' }}>
-                    📱 Aapke Easypaisa number par payment request aayegi
+                    Aapke Easypaisa number par payment request aayegi
                   </p>
                 </div>
               )}
 
-              {/* CARD FIELDS */}
+              {/* CARD */}
               {selected === 'card' && method.id === 'card' && (
                 <div style={{
                   backgroundColor: '#161B22',
@@ -322,7 +348,7 @@ export default function Payment() {
 
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <div style={{ flex: 1 }}>
-                      <label style={labelStyle}>Expiry Date</label>
+                      <label style={labelStyle}>Expiry</label>
                       <input
                         type="text"
                         placeholder="MM/YY"
@@ -345,7 +371,7 @@ export default function Payment() {
                   </div>
 
                   <p style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '8px' }}>
-                    🔒 Aapka card data secure hai — kabhi save nahi hoga
+                    🔒 Card data secure hai — save nahi hoga
                   </p>
                 </div>
               )}
@@ -355,12 +381,12 @@ export default function Payment() {
           {/* MESSAGE */}
           {message.text && (
             <div style={{
-              backgroundColor: '#3a1a1a',
-              border: '1px solid #f85149',
+              backgroundColor: message.type === 'success' ? '#1a3a2a' : '#3a1a1a',
+              border: '1px solid ' + (message.type === 'success' ? '#1DB954' : '#f85149'),
               borderRadius: '8px',
               padding: '12px 16px',
               marginBottom: '16px',
-              color: '#f85149',
+              color: message.type === 'success' ? '#1DB954' : '#f85149',
               fontSize: '0.9rem',
               textAlign: 'center'
             }}>
@@ -385,7 +411,7 @@ export default function Payment() {
               marginTop: '8px',
               marginBottom: '16px'
             }}>
-            {loading ? '⏳ Processing...' : 'Rs. 1,500 — Abhi Pay Karein →'}
+            {loading ? 'Processing...' : 'Rs. 1,500 — Abhi Pay Karein →'}
           </button>
 
           <div style={{ textAlign: 'center', color: '#8B949E', fontSize: '0.8rem' }}>
@@ -395,7 +421,6 @@ export default function Payment() {
         </div>
       </div>
 
-      {/* FOOTER */}
       <footer style={{
         borderTop: '1px solid #21262D',
         padding: '16px 40px',
@@ -408,4 +433,4 @@ export default function Payment() {
 
     </main>
   )
-    }
+        }
