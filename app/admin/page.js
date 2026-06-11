@@ -11,6 +11,7 @@ export default function AdminPanel() {
   const [selectedFiling, setSelectedFiling] = useState(null)
   const [selectedAgent, setSelectedAgent] = useState(null)
   const [adminMessage, setAdminMessage] = useState('')
+  const [sendingMsg, setSendingMsg] = useState(false)
   const [stats, setStats] = useState({
     pending: 0,
     verified: 0,
@@ -31,14 +32,26 @@ export default function AdminPanel() {
         window.location.href = '/login'
         return
       }
-      const role = data.user.user_metadata?.role
+
+      // Role check profiles table se karo (secure)
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, full_name')
+        .eq('id', data.user.id)
+        .single()
+
+      // Agar profile nahi mila to user_metadata se fallback
+      const role = profile?.role || data.user.user_metadata?.role
+
       if (role !== 'admin') {
         window.location.href = '/'
         return
       }
+
       setUser(data.user)
       await loadData()
     } catch (error) {
+      console.error('Admin check error:', error)
       window.location.href = '/login'
     } finally {
       setLoading(false)
@@ -46,49 +59,71 @@ export default function AdminPanel() {
   }
 
   const loadData = async () => {
-    // Filings load karo
-    const { data: filingsData } = await supabase
+    // Sab filings load karo
+    const { data: filingsData, error: filingsError } = await supabase
       .from('filings')
-      .select('*')
+      .select(`
+        *,
+        profiles!filings_user_id_fkey(full_name, role)
+      `)
       .order('created_at', { ascending: false })
+
+    if (filingsError) {
+      console.error('Filings load error:', filingsError)
+      // Fallback — bina join ke try karo
+      const { data: simpleFiling } = await supabase
+        .from('filings')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (simpleFiling) {
+        setFilings(simpleFiling)
+        calcStats(simpleFiling, [])
+      }
+      return
+    }
 
     if (filingsData) {
       setFilings(filingsData)
-      setStats(prev => ({
-        ...prev,
-        pending: filingsData.filter(f => f.status === 'pending').length,
-        verified: filingsData.filter(f => f.status === 'verified').length,
-        totalFilings: filingsData.length,
-        revenue: filingsData.filter(f => f.payment_status === 'paid').length * 1500
-      }))
-    }
+      
+      // Agents load karo
+      const { data: agentsData } = await supabase
+        .from('agent_clients')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    // Agents load karo
-    const { data: agentsData } = await supabase
-      .from('agent_clients')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (agentsData) {
-      // Unique agents nikalo
-      const uniqueAgents = [...new Map(
-        agentsData.map(item => [item.agent_id, item])
-      ).values()]
-
-      setAgents(agentsData)
-      setStats(prev => ({
-        ...prev,
-        totalAgents: uniqueAgents.length,
-        totalClients: agentsData.length
-      }))
+      const agentsList = agentsData || []
+      setAgents(agentsList)
+      calcStats(filingsData, agentsList)
     }
   }
 
+  const calcStats = (filingsData, agentsData) => {
+    const uniqueAgents = [...new Map(
+      agentsData.map(item => [item.agent_id, item])
+    ).values()]
+
+    setStats({
+      pending: filingsData.filter(f => f.status === 'pending').length,
+      verified: filingsData.filter(f => f.status === 'verified').length,
+      totalFilings: filingsData.length,
+      revenue: filingsData.filter(f => f.payment_status === 'paid').length * 1500,
+      totalAgents: uniqueAgents.length,
+      totalClients: agentsData.length
+    })
+  }
+
   const updateStatus = async (filingId, status) => {
-    await supabase
+    const { error } = await supabase
       .from('filings')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', filingId)
+
+    if (error) {
+      alert('Status update failed: ' + error.message)
+      return
+    }
+
     await loadData()
     if (selectedFiling?.id === filingId) {
       setSelectedFiling(prev => ({ ...prev, status }))
@@ -97,14 +132,47 @@ export default function AdminPanel() {
 
   const sendMessage = async () => {
     if (!adminMessage.trim() || !selectedFiling) return
-    await supabase.from('admin_messages').insert({
-      filing_id: selectedFiling.id,
-      user_id: selectedFiling.user_id,
-      sender: 'admin',
-      message: adminMessage.trim()
-    })
+    setSendingMsg(true)
+
+    const { error } = await supabase
+      .from('admin_messages')
+      .insert({
+        filing_id: selectedFiling.id,
+        user_id: selectedFiling.user_id,
+        sender: 'admin',
+        message: adminMessage.trim(),
+        message_type: 'message'
+      })
+
+    if (error) {
+      alert('Message send failed: ' + error.message)
+      setSendingMsg(false)
+      return
+    }
+
     setAdminMessage('')
+    setSendingMsg(false)
     alert('Message bhej diya gaya! ✅')
+  }
+
+  // Verify + auto message bhejo
+  const verifyAndNotify = async (filingId) => {
+    // 1. Status update karo
+    await updateStatus(filingId, 'verified')
+
+    // 2. Automatic verified message bhejo user ko
+    const filing = filings.find(f => f.id === filingId) || selectedFiling
+    if (filing) {
+      await supabase
+        .from('admin_messages')
+        .insert({
+          filing_id: filingId,
+          user_id: filing.user_id,
+          sender: 'admin',
+          message: '✅ Aapki tax details verify ho gayi hain! Ab aap choose kar saktay hain:\n\n1. Khud Iris pe file karein (free)\n2. Admin se karwayein (Rs. 3,000)\n\nNeeche options available hain.',
+          message_type: 'verified'
+        })
+    }
   }
 
   const handleLogout = async () => {
@@ -129,14 +197,9 @@ export default function AdminPanel() {
   if (loading) {
     return (
       <main style={{
-        backgroundColor: '#0D1117',
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#1DB954',
-        fontFamily: 'sans-serif',
-        fontSize: '1.2rem'
+        backgroundColor: '#0D1117', minHeight: '100vh',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#1DB954', fontFamily: 'sans-serif', fontSize: '1.2rem'
       }}>
         ⏳ Checking access...
       </main>
@@ -147,98 +210,67 @@ export default function AdminPanel() {
 
   return (
     <main style={{
-      backgroundColor: '#0D1117',
-      minHeight: '100vh',
-      fontFamily: 'sans-serif',
-      color: '#E6EDF3'
+      backgroundColor: '#0D1117', minHeight: '100vh',
+      fontFamily: 'sans-serif', color: '#E6EDF3'
     }}>
 
       {/* NAVBAR */}
       <nav style={{
-        backgroundColor: '#161B22',
-        borderBottom: '1px solid #21262D',
-        padding: '14px 24px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
+        backgroundColor: '#161B22', borderBottom: '1px solid #21262D',
+        padding: '14px 24px', display: 'flex',
+        justifyContent: 'space-between', alignItems: 'center'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ color: '#1DB954', fontSize: '1.3rem', fontWeight: 'bold' }}>
             TaxFiller AI
           </div>
           <span style={{
-            backgroundColor: '#1DB954',
-            color: '#000',
-            fontSize: '0.7rem',
-            fontWeight: 'bold',
-            padding: '2px 8px',
-            borderRadius: '10px'
-          }}>
-            ADMIN
-          </span>
+            backgroundColor: '#1DB954', color: '#000',
+            fontSize: '0.7rem', fontWeight: 'bold',
+            padding: '2px 8px', borderRadius: '10px'
+          }}>ADMIN</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ color: '#8B949E', fontSize: '0.85rem' }}>{user?.email}</span>
-          <button
-            onClick={handleLogout}
-            style={{
-              backgroundColor: 'transparent',
-              color: '#f85149',
-              border: '1px solid #f85149',
-              borderRadius: '8px',
-              padding: '6px 14px',
-              cursor: 'pointer',
-              fontSize: '0.85rem'
-            }}>
-            Logout
-          </button>
+          <button onClick={handleLogout} style={{
+            backgroundColor: 'transparent', color: '#f85149',
+            border: '1px solid #f85149', borderRadius: '8px',
+            padding: '6px 14px', cursor: 'pointer', fontSize: '0.85rem'
+          }}>Logout</button>
         </div>
       </nav>
 
       {/* TABS */}
       <div style={{
-        backgroundColor: '#161B22',
-        borderBottom: '1px solid #21262D',
-        padding: '0 24px',
-        display: 'flex',
-        gap: '4px'
+        backgroundColor: '#161B22', borderBottom: '1px solid #21262D',
+        padding: '0 24px', display: 'flex', gap: '4px'
       }}>
         {[
           { id: 'dashboard', label: '📊 Dashboard' },
-          { id: 'filings', label: '📋 Filings' },
+          { id: 'filings', label: `📋 Filings (${filings.length})` },
           { id: 'agents', label: '👥 Agents' },
         ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              backgroundColor: 'transparent',
-              color: activeTab === tab.id ? '#1DB954' : '#8B949E',
-              border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid #1DB954' : '2px solid transparent',
-              padding: '14px 20px',
-              cursor: 'pointer',
-              fontSize: '0.95rem',
-              fontWeight: activeTab === tab.id ? 'bold' : 'normal'
-            }}>
-            {tab.label}
-          </button>
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            backgroundColor: 'transparent',
+            color: activeTab === tab.id ? '#1DB954' : '#8B949E',
+            border: 'none',
+            borderBottom: activeTab === tab.id ? '2px solid #1DB954' : '2px solid transparent',
+            padding: '14px 20px', cursor: 'pointer', fontSize: '0.95rem',
+            fontWeight: activeTab === tab.id ? 'bold' : 'normal'
+          }}>{tab.label}</button>
         ))}
       </div>
 
       <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
 
-        {/* DASHBOARD TAB */}
+        {/* DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '24px' }}>Dashboard</h2>
-
-            {/* STATS */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-              gap: '16px',
-              marginBottom: '32px'
+              gap: '16px', marginBottom: '32px'
             }}>
               {[
                 { label: 'Total Filings', value: stats.totalFilings, icon: '📋', color: '#58A6FF' },
@@ -249,11 +281,8 @@ export default function AdminPanel() {
                 { label: 'Total Clients', value: stats.totalClients, icon: '👥', color: '#F0883E' },
               ].map((stat, i) => (
                 <div key={i} style={{
-                  backgroundColor: '#161B22',
-                  border: '1px solid #21262D',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  textAlign: 'center'
+                  backgroundColor: '#161B22', border: '1px solid #21262D',
+                  borderRadius: '12px', padding: '20px', textAlign: 'center'
                 }}>
                   <div style={{ fontSize: '2rem', marginBottom: '8px' }}>{stat.icon}</div>
                   <div style={{ color: stat.color, fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '4px' }}>
@@ -264,46 +293,39 @@ export default function AdminPanel() {
               ))}
             </div>
 
-            {/* RECENT FILINGS */}
             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: '#8B949E' }}>
               Recent Filings
             </h3>
             {filings.length === 0 ? (
               <div style={{
-                backgroundColor: '#161B22',
-                border: '1px solid #21262D',
-                borderRadius: '12px',
-                padding: '40px',
-                textAlign: 'center',
-                color: '#8B949E'
+                backgroundColor: '#161B22', border: '1px solid #21262D',
+                borderRadius: '12px', padding: '40px',
+                textAlign: 'center', color: '#8B949E'
               }}>
                 Abhi koi filing nahi hai
               </div>
             ) : (
               filings.slice(0, 5).map(filing => (
-                <div
-                  key={filing.id}
+                <div key={filing.id}
                   onClick={() => { setSelectedFiling(filing); setActiveTab('filings') }}
                   style={{
-                    backgroundColor: '#161B22',
-                    border: '1px solid #21262D',
-                    borderRadius: '12px',
-                    padding: '16px 20px',
-                    marginBottom: '12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
+                    backgroundColor: '#161B22', border: '1px solid #21262D',
+                    borderRadius: '12px', padding: '16px 20px',
+                    marginBottom: '12px', cursor: 'pointer',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                   }}>
                   <div>
                     <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                      Filing #{filing.id.slice(0, 8)}
+                      {filing.profiles?.full_name || 'User'} — #{filing.id.slice(0, 8)}
                     </div>
                     <div style={{ color: '#8B949E', fontSize: '0.85rem' }}>
                       {new Date(filing.created_at).toLocaleDateString('en-PK')}
                     </div>
                   </div>
-                  <span style={{ color: getStatusColor(filing.status), fontSize: '0.85rem', fontWeight: 'bold' }}>
+                  <span style={{
+                    color: getStatusColor(filing.status),
+                    fontSize: '0.85rem', fontWeight: 'bold'
+                  }}>
                     {getStatusLabel(filing.status)}
                   </span>
                 </div>
@@ -325,36 +347,36 @@ export default function AdminPanel() {
               </h2>
               {filings.length === 0 ? (
                 <div style={{
-                  backgroundColor: '#161B22',
-                  border: '1px solid #21262D',
-                  borderRadius: '12px',
-                  padding: '40px',
-                  textAlign: 'center',
-                  color: '#8B949E'
+                  backgroundColor: '#161B22', border: '1px solid #21262D',
+                  borderRadius: '12px', padding: '40px',
+                  textAlign: 'center', color: '#8B949E'
                 }}>
                   Abhi koi filing nahi hai
                 </div>
               ) : (
                 filings.map(filing => (
-                  <div
-                    key={filing.id}
+                  <div key={filing.id}
                     onClick={() => setSelectedFiling(filing)}
                     style={{
                       backgroundColor: selectedFiling?.id === filing.id ? '#1a3a2a' : '#161B22',
                       border: `1px solid ${selectedFiling?.id === filing.id ? '#1DB954' : '#21262D'}`,
-                      borderRadius: '12px',
-                      padding: '16px 20px',
-                      marginBottom: '12px',
-                      cursor: 'pointer'
+                      borderRadius: '12px', padding: '16px 20px',
+                      marginBottom: '12px', cursor: 'pointer'
                     }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontWeight: 'bold' }}>#{filing.id.slice(0, 8)}</span>
-                      <span style={{ color: getStatusColor(filing.status), fontSize: '0.85rem', fontWeight: 'bold' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: 'bold' }}>
+                        {filing.profiles?.full_name || 'User'} — #{filing.id.slice(0, 8)}
+                      </span>
+                      <span style={{
+                        color: getStatusColor(filing.status),
+                        fontSize: '0.85rem', fontWeight: 'bold'
+                      }}>
                         {getStatusLabel(filing.status)}
                       </span>
                     </div>
                     <div style={{ color: '#8B949E', fontSize: '0.8rem' }}>
-                      {new Date(filing.created_at).toLocaleString('en-PK')}
+                      {new Date(filing.created_at).toLocaleString('en-PK')} •{' '}
+                      {filing.payment_status === 'paid' ? '💳 Paid' : '⏳ Unpaid'}
                     </div>
                   </div>
                 ))
@@ -363,34 +385,35 @@ export default function AdminPanel() {
 
             {selectedFiling && (
               <div style={{
-                backgroundColor: '#161B22',
-                border: '1px solid #21262D',
-                borderRadius: '16px',
-                padding: '24px',
-                height: 'fit-content'
+                backgroundColor: '#161B22', border: '1px solid #21262D',
+                borderRadius: '16px', padding: '24px', height: 'fit-content',
+                position: 'sticky', top: '20px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                   <h3 style={{ fontSize: '1.1rem', margin: 0 }}>Filing Detail</h3>
-                  <button
-                    onClick={() => setSelectedFiling(null)}
-                    style={{ backgroundColor: 'transparent', color: '#8B949E', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>
-                    ✕
-                  </button>
+                  <button onClick={() => setSelectedFiling(null)} style={{
+                    backgroundColor: 'transparent', color: '#8B949E',
+                    border: 'none', cursor: 'pointer', fontSize: '1.2rem'
+                  }}>✕</button>
                 </div>
 
-                <div style={{ backgroundColor: '#0D1117', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                {/* Filing Info */}
+                <div style={{
+                  backgroundColor: '#0D1117', borderRadius: '10px',
+                  padding: '16px', marginBottom: '16px'
+                }}>
                   {[
-                    { label: 'Filing ID', value: selectedFiling.id.slice(0, 16) + '...' },
+                    { label: 'User', value: selectedFiling.profiles?.full_name || 'N/A' },
+                    { label: 'Filing ID', value: '#' + selectedFiling.id.slice(0, 12) },
                     { label: 'Status', value: getStatusLabel(selectedFiling.status) },
-                    { label: 'Payment', value: selectedFiling.payment_method || 'N/A' },
+                    { label: 'Payment', value: selectedFiling.payment_status === 'paid' ? '✅ Paid' : '❌ Unpaid' },
                     { label: 'Date', value: new Date(selectedFiling.created_at).toLocaleString('en-PK') },
                   ].map((item, i) => (
                     <div key={i} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      marginBottom: i < 3 ? '12px' : '0',
-                      paddingBottom: i < 3 ? '12px' : '0',
-                      borderBottom: i < 3 ? '1px solid #21262D' : 'none'
+                      display: 'flex', justifyContent: 'space-between',
+                      marginBottom: i < 4 ? '12px' : '0',
+                      paddingBottom: i < 4 ? '12px' : '0',
+                      borderBottom: i < 4 ? '1px solid #21262D' : 'none'
                     }}>
                       <span style={{ color: '#8B949E', fontSize: '0.85rem' }}>{item.label}</span>
                       <span style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{item.value}</span>
@@ -398,62 +421,89 @@ export default function AdminPanel() {
                   ))}
                 </div>
 
+                {/* AI Summary */}
+                {selectedFiling.chat_summary && (
+                  <div style={{
+                    backgroundColor: '#0D1117', borderRadius: '10px',
+                    padding: '12px', marginBottom: '16px',
+                    maxHeight: '150px', overflowY: 'auto'
+                  }}>
+                    <div style={{ color: '#8B949E', fontSize: '0.8rem', marginBottom: '8px' }}>
+                      📋 AI Summary:
+                    </div>
+                    <div style={{ color: '#E6EDF3', fontSize: '0.8rem', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                      {selectedFiling.chat_summary.replace('CHAT_COMPLETE', '').trim()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Status Buttons */}
                 <div style={{ marginBottom: '16px' }}>
-                  <div style={{ color: '#8B949E', fontSize: '0.85rem', marginBottom: '10px' }}>Status Update:</div>
+                  <div style={{ color: '#8B949E', fontSize: '0.85rem', marginBottom: '10px' }}>
+                    Status Update:
+                  </div>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <button
-                      onClick={() => updateStatus(selectedFiling.id, 'verified')}
-                      style={{ backgroundColor: '#1a3a2a', color: '#1DB954', border: '1px solid #1DB954', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                      ✅ Verify
+                      onClick={() => verifyAndNotify(selectedFiling.id)}
+                      style={{
+                        backgroundColor: '#1a3a2a', color: '#1DB954',
+                        border: '1px solid #1DB954', borderRadius: '8px',
+                        padding: '8px 16px', cursor: 'pointer',
+                        fontSize: '0.85rem', fontWeight: 'bold'
+                      }}>
+                      ✅ Verify + Notify
                     </button>
                     <button
                       onClick={() => updateStatus(selectedFiling.id, 'pending')}
-                      style={{ backgroundColor: '#2a1f0a', color: '#F0883E', border: '1px solid #F0883E', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      style={{
+                        backgroundColor: '#2a1f0a', color: '#F0883E',
+                        border: '1px solid #F0883E', borderRadius: '8px',
+                        padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem'
+                      }}>
                       ⏳ Pending
                     </button>
                     <button
                       onClick={() => updateStatus(selectedFiling.id, 'rejected')}
-                      style={{ backgroundColor: '#2a0a0a', color: '#f85149', border: '1px solid #f85149', borderRadius: '8px', padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      style={{
+                        backgroundColor: '#2a0a0a', color: '#f85149',
+                        border: '1px solid #f85149', borderRadius: '8px',
+                        padding: '8px 16px', cursor: 'pointer', fontSize: '0.85rem'
+                      }}>
                       ❌ Reject
                     </button>
                   </div>
                 </div>
 
+                {/* Message */}
                 <div>
-                  <div style={{ color: '#8B949E', fontSize: '0.85rem', marginBottom: '10px' }}>User Ko Message Karo:</div>
+                  <div style={{ color: '#8B949E', fontSize: '0.85rem', marginBottom: '10px' }}>
+                    User Ko Message Karo:
+                  </div>
                   <textarea
                     value={adminMessage}
                     onChange={(e) => setAdminMessage(e.target.value)}
                     placeholder="User ko kya batana chahte hain..."
                     rows={3}
                     style={{
-                      width: '100%',
-                      backgroundColor: '#0D1117',
-                      border: '1px solid #30363D',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      color: '#E6EDF3',
-                      fontSize: '0.9rem',
-                      outline: 'none',
-                      resize: 'none',
-                      boxSizing: 'border-box',
+                      width: '100%', backgroundColor: '#0D1117',
+                      border: '1px solid #30363D', borderRadius: '8px',
+                      padding: '12px', color: '#E6EDF3', fontSize: '0.9rem',
+                      outline: 'none', resize: 'none', boxSizing: 'border-box',
                       marginBottom: '10px'
                     }}
                   />
                   <button
                     onClick={sendMessage}
-                    disabled={!adminMessage.trim()}
+                    disabled={!adminMessage.trim() || sendingMsg}
                     style={{
                       width: '100%',
                       backgroundColor: adminMessage.trim() ? '#1DB954' : '#21262D',
                       color: adminMessage.trim() ? '#000' : '#8B949E',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      cursor: adminMessage.trim() ? 'pointer' : 'not-allowed',
+                      border: 'none', borderRadius: '8px',
+                      padding: '12px', cursor: adminMessage.trim() ? 'pointer' : 'not-allowed',
                       fontWeight: 'bold'
                     }}>
-                    💬 Message Bhejo
+                    {sendingMsg ? 'Sending...' : '💬 Message Bhejo'}
                   </button>
                 </div>
               </div>
@@ -464,27 +514,19 @@ export default function AdminPanel() {
         {/* AGENTS TAB */}
         {activeTab === 'agents' && (
           <div>
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '24px' }}>
-              Agents & Clients
-            </h2>
-
-            {/* AGENT STATS */}
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '24px' }}>Agents & Clients</h2>
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '16px',
-              marginBottom: '32px'
+              gap: '16px', marginBottom: '32px'
             }}>
               {[
                 { label: 'Total Agents', value: stats.totalAgents, icon: '👤', color: '#58A6FF' },
                 { label: 'Total Clients', value: stats.totalClients, icon: '👥', color: '#1DB954' },
               ].map((stat, i) => (
                 <div key={i} style={{
-                  backgroundColor: '#161B22',
-                  border: '1px solid #21262D',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  textAlign: 'center'
+                  backgroundColor: '#161B22', border: '1px solid #21262D',
+                  borderRadius: '12px', padding: '20px', textAlign: 'center'
                 }}>
                   <div style={{ fontSize: '2rem', marginBottom: '8px' }}>{stat.icon}</div>
                   <div style={{ color: stat.color, fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '4px' }}>
@@ -495,73 +537,49 @@ export default function AdminPanel() {
               ))}
             </div>
 
-            {/* CLIENTS LIST */}
-            <h3 style={{ color: '#8B949E', marginBottom: '16px' }}>
-              Sab Clients ({agents.length})
-            </h3>
-
             {agents.length === 0 ? (
               <div style={{
-                backgroundColor: '#161B22',
-                border: '1px solid #21262D',
-                borderRadius: '12px',
-                padding: '40px',
-                textAlign: 'center',
-                color: '#8B949E'
+                backgroundColor: '#161B22', border: '1px solid #21262D',
+                borderRadius: '12px', padding: '40px',
+                textAlign: 'center', color: '#8B949E'
               }}>
                 Abhi koi agent ya client nahi hai
               </div>
             ) : (
               agents.map(client => (
-                <div
-                  key={client.id}
+                <div key={client.id}
                   onClick={() => setSelectedAgent(selectedAgent?.id === client.id ? null : client)}
                   style={{
                     backgroundColor: selectedAgent?.id === client.id ? '#1a2a3a' : '#161B22',
                     border: `1px solid ${selectedAgent?.id === client.id ? '#58A6FF' : '#21262D'}`,
-                    borderRadius: '12px',
-                    padding: '16px 20px',
-                    marginBottom: '12px',
-                    cursor: 'pointer'
+                    borderRadius: '12px', padding: '16px 20px',
+                    marginBottom: '12px', cursor: 'pointer'
                   }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                        {client.client_name}
-                      </div>
-                      <div style={{ color: '#8B949E', fontSize: '0.85rem' }}>
-                        CNIC: {client.client_cnic}
-                      </div>
+                      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>{client.client_name}</div>
+                      <div style={{ color: '#8B949E', fontSize: '0.85rem' }}>CNIC: {client.client_cnic}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span style={{
-                        backgroundColor: '#1a3a2a',
-                        color: '#1DB954',
-                        fontSize: '0.8rem',
-                        padding: '4px 10px',
-                        borderRadius: '8px'
-                      }}>
-                        {client.status}
-                      </span>
-                    </div>
+                    <span style={{
+                      backgroundColor: '#1a3a2a', color: '#1DB954',
+                      fontSize: '0.8rem', padding: '4px 10px', borderRadius: '8px'
+                    }}>
+                      {client.status || 'active'}
+                    </span>
                   </div>
 
                   {selectedAgent?.id === client.id && (
                     <div style={{
                       borderTop: '1px solid #21262D',
-                      marginTop: '12px',
-                      paddingTop: '12px'
+                      marginTop: '12px', paddingTop: '12px'
                     }}>
                       {[
-                        { label: 'Agent ID', value: client.agent_id?.slice(0, 16) + '...' },
                         { label: 'Phone', value: client.client_phone || 'N/A' },
                         { label: 'Email', value: client.client_email || 'N/A' },
                         { label: 'Added', value: new Date(client.created_at).toLocaleDateString('en-PK') },
                       ].map((item, i) => (
                         <div key={i} style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          marginBottom: '8px'
+                          display: 'flex', justifyContent: 'space-between', marginBottom: '8px'
                         }}>
                           <span style={{ color: '#8B949E', fontSize: '0.85rem' }}>{item.label}</span>
                           <span style={{ fontSize: '0.85rem' }}>{item.value}</span>
@@ -577,16 +595,11 @@ export default function AdminPanel() {
       </div>
 
       <footer style={{
-        borderTop: '1px solid #21262D',
-        padding: '16px 24px',
-        textAlign: 'center',
-        color: '#8B949E',
-        fontSize: '0.8rem',
-        marginTop: '40px'
+        borderTop: '1px solid #21262D', padding: '16px 24px',
+        textAlign: 'center', color: '#8B949E', fontSize: '0.8rem', marginTop: '40px'
       }}>
         © 2026 TaxFiller AI — Admin Panel | Ahmed Shehzad
       </footer>
-
     </main>
   )
     }
