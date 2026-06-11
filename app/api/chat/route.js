@@ -38,31 +38,29 @@ STEP 5: Filer status — pehle se FBR filer hain ya nahi?
 
 JAB SARI INFORMATION MIL JAYE — FINAL SUMMARY DO:
 
-"✅ Shukriya! Aapki saari information mil gayi. Yeh raha aapka complete tax summary:
+"Shukriya! Aapki saari information mil gayi. Yeh raha aapka complete tax summary:
 
-━━━━━━━━━━━━━━━━━━━━
-📋 PERSONAL INFO:
-• Naam: [value]
-• CNIC: [value]
-• Filer Status: [value]
+PERSONAL INFO:
+- Naam: [value]
+- CNIC: [value]
+- Filer Status: [value]
 
-💼 INCOME DETAILS:
-• Employment Type: [value]
-• Employer/Business: [value]
-• Annual Income: Rs. [value]
-• Allowances: Rs. [value]
-• Withholding Tax: Rs. [value]
+INCOME DETAILS:
+- Employment Type: [value]
+- Employer/Business: [value]
+- Annual Income: Rs. [value]
+- Allowances: Rs. [value]
+- Withholding Tax: Rs. [value]
 
-💰 TAX CALCULATION (FBR 2024-25):
-• Taxable Income: Rs. [calculated]
-• Tax Liability: Rs. [calculated]
-• Tax Already Paid: Rs. [withholding]
-• Tax Payable/Refund: Rs. [difference]
-━━━━━━━━━━━━━━━━━━━━
+TAX CALCULATION (FBR 2024-25):
+- Taxable Income: Rs. [calculated]
+- Tax Liability: Rs. [calculated]
+- Tax Already Paid: Rs. [withholding]
+- Balance Tax Payable: Rs. [difference]
 
 Aapki filing ab expert verification ke liye ready hai! Admin 24-48 ghante mein review karega."
 
-SUMMARY KE BAAD EXACTLY YEH WORD LIKHO (koi space nahi, bilkul aisa):
+SUMMARY LIKHNE KE BILKUL BAAD — AKHRI LINE MEIN SIRF YEH LIKHO:
 CHAT_COMPLETE
 
 FBR TAX SLABS 2024-25 (SALARIED):
@@ -77,41 +75,59 @@ ZAROORI RULES:
 - Sirf FBR aur Pakistan tax topics par baat kar
 - Koi hallucination nahi — sirf jo user ne bataya wahi use karo
 - Calculation mein annual income use karo (monthly x 12)
-- Agar user kuch unclear bataye to dobara poochho
-- CHAT_COMPLETE sirf tab likho jab summary complete ho`
+- CHAT_COMPLETE sirf tab likho jab summary bilkul complete ho`
 
 export async function POST(request) {
   try {
-    const { message, history } = await request.json()
+    const body = await request.json()
+    
+    // Dono formats handle karo — message+history ya messages array
+    const userMessage = body.message
+    const history = body.history || []
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash-lite',
       systemInstruction: SYSTEM_PROMPT
     })
 
-    let safeHistory = (history || []).map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content || (Array.isArray(msg.parts) ? msg.parts[0]?.text : msg.parts) || '' }]
-    }))
+    // History safely format karo
+    let safeHistory = history
+      .filter(msg => msg && (msg.role === 'user' || msg.role === 'model'))
+      .map(msg => ({
+        role: msg.role,
+        parts: [{ 
+          text: msg.parts?.[0]?.text || msg.content || msg.text || ''
+        }]
+      }))
+      .filter(msg => msg.parts[0].text.trim() !== '')
 
+    // Pehla message model ka nahi hona chahiye
     if (safeHistory.length > 0 && safeHistory[0].role === 'model') {
       safeHistory.shift()
     }
 
+    // Consecutive same roles fix karo
+    const cleanHistory = []
+    for (let i = 0; i < safeHistory.length; i++) {
+      if (i === 0 || safeHistory[i].role !== safeHistory[i-1].role) {
+        cleanHistory.push(safeHistory[i])
+      }
+    }
+
     const chat = model.startChat({
-      history: safeHistory
+      history: cleanHistory
     })
 
-    const result = await chat.sendMessage(message)
+    const result = await chat.sendMessage(userMessage)
     const reply = result.response.text()
 
     return Response.json({ reply })
 
   } catch (error) {
-    console.error('Gemini error:', error)
+    console.error('Gemini error:', error.message)
     return Response.json(
       { reply: 'Maafi chahta hoon, abhi kuch masla hai. Thodi der baad try karein.' },
       { status: 500 }
     )
   }
-                                      }
+  }
