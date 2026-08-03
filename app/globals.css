@@ -1,0 +1,93 @@
+/* app/globals.css
+   Global styles: white background, refined typography and Gemini-like animated accents.
+   Font Inter is loaded from app/layout.js
+*/
+
+:root{
+  --bg: #ffffff;
+  --text: #071022;
+  --muted: #475569;
+  --card-bg: #ffffff;
+  --radius: 14px;
+  --accent-gradient: linear-gradient(90deg, #7c3aed 10%, #06b6d4 40%, #f97316 70%, #ec4899 100%);
+  --accent-duration: 6s;
+}
+
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  line-height:1.45;
+}
+
+/* Layout */
+.container{max-width:1100px;margin:0 auto;padding:48px 24px}
+
+/* Header / nav */
+.site-nav{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
+.brand{font-weight:700;font-size:1.25rem}
+.nav-actions{display:flex;gap:12px;align-items:center}
+
+/* Cards */
+.card{
+  background:var(--card-bg);
+  border-radius:var(--radius);
+  padding:18px;
+  box-shadow: 0 6px 18px rgba(7,16,34,0.06);
+  border: 1px solid rgba(7,16,34,0.04);
+}
+
+/* Hero */
+.hero{display:flex;align-items:center;gap:40px;padding:48px 0}
+.hero-left{flex:1}
+.hero-right{flex:1;display:flex;align-items:center;justify-content:center}
+
+/* Heading */
+.h1{font-size:clamp(28px,4.6vw,44px);margin:0 0 12px 0;font-weight:700;letter-spacing:-0.02em;color:var(--text)}
+.gradient-text{
+  background: var(--accent-gradient);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift var(--accent-duration) linear infinite;
+}
+@keyframes gradientShift{
+  0%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+  100%{background-position:0% 50%}
+}
+
+.lead{color:var(--muted);font-weight:500;margin:0 0 20px 0}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;padding:12px 18px;border-radius:12px;font-weight:600;cursor:pointer;transition:transform .18s ease, box-shadow .18s ease;border:1px solid rgba(7,16,34,0.06);background:#fff;color:var(--text);box-shadow:0 6px 16px rgba(7,16,34,0.06)}
+.btn:active{transform:translateY(1px)}
+.btn + .btn{margin-left:12px}
+.btn--accent{position:relative;overflow:hidden;color:#fff;background:linear-gradient(180deg, rgba(0,0,0,0.03), rgba(255,255,255,0.01));border:none;padding:10px 22px}
+.btn--accent::before{content:"";position:absolute;inset:-50%;z-index:0;background:var(--accent-gradient);background-size:200% 200%;filter:blur(12px) saturate(120%);opacity:0.98;animation:gradientShift var(--accent-duration) linear infinite}
+.btn--accent > *{position:relative;z-index:1}
+.btn--outline{background:transparent;border:1px solid rgba(7,16,34,0.06)}
+.btn--outline.gradient-border{position:relative;overflow:hidden}
+.btn--outline.gradient-border::after{content:"";position:absolute;inset:-2px;z-index:-1;background:var(--accent-gradient);background-size:200% 200%;filter:blur(14px) contrast(1.05);opacity:.6;animation:gradientShift var(--accent-duration) linear infinite;border-radius:14px;mix-blend-mode:normal}
+
+/* Docs list */
+.docs{display:grid;gap:12px;margin-top:24px}
+.docs .doc{padding:14px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,#fff,#f7fbff);border:1px solid rgba(7,16,34,0.03)}
+
+/* small accent */
+.accent{display:inline-block;background:var(--accent-gradient);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;background-size:200% 200%;animation:gradientShift var(--accent-duration) linear infinite;font-weight:700}
+
+/* footer */
+.site-footer{border-top:1px solid rgba(7,16,34,0.06);padding:24px 0;color:var(--muted);font-size:0.9rem;text-align:center}
+
+/* responsive */
+@media (max-width:900px){.hero{flex-direction:column-reverse;gap:20px}.container{padding:28px 18px}}
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce){.gradient-text,.btn--accent::before,.btn--outline.gradient-border::after{animation:none;background-position:50% 50%}}
